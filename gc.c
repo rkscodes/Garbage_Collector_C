@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #define STACK_MAX 120
-#define INITIAL_GC_THRESHOLD 4
+#define INITIAL_GC_THRESHOLD 8
 
 typedef enum { OBJ_INT, OBJ_PAIR } ObjectType;
 
@@ -77,12 +77,13 @@ void pushInt(VM *vm, int intVal) {
 
 // the idea is that you push key first and then value which you want to make
 // pair of and then do this operation to make them pair.
-void pushPair(VM *vm) {
+Object *pushPair(VM *vm) {
   Object *obj = newObj(vm, OBJ_PAIR);
   obj->type = OBJ_PAIR;
   obj->tail = pop(vm);
   obj->head = pop(vm);
   push(vm, obj);
+  return obj;
 }
 
 // WE will implement mark-sweep algo to clean the memory
@@ -128,7 +129,9 @@ void gc(VM *vm) {
   markAll(vm);
   sweep(vm);
   vm->maxNoOfObjects =
-      vm->noOfObjects == 0 ? INITIAL_GC_THRESHOLD : vm->maxNoOfObjects * 2;
+      vm->noOfObjects == 0 ? INITIAL_GC_THRESHOLD : vm->noOfObjects * 2;
+  if (vm->maxNoOfObjects > STACK_MAX) vm->maxNoOfObjects = STACK_MAX;
+  // This will atleast try to collect garbage when max size is hit
 
   printf("Collected %d ojbects, %d remaining.\n",
          numOfObjects - vm->noOfObjects, vm->noOfObjects);
@@ -150,6 +153,8 @@ void objectPrint(Object *obj) {
 }
 
 void freeVM(VM *vm) {
+  // this would make sure that mark doesn't markAll doesn't mark any object and
+  // will be sweeped by sweep
   vm->stacksize = 0;
   gc(vm);
   free(vm);
@@ -165,7 +170,71 @@ void test1() {
   freeVM(vm);
 }
 
+void test2() {
+  printf("Test 2: Unreached objects are collected.\n");
+  VM *vm = newVM();
+  pushInt(vm, 1);
+  pushInt(vm, 2);
+  pop(vm);
+  pop(vm);
+  gc(vm);
+  assert(vm->noOfObjects == 0, "Should have collected objects.");
+  freeVM(vm);
+}
+
+void test3() {
+  printf("Test 3: Reach nested objects.\n");
+  VM *vm = newVM();
+  pushInt(vm, 1);
+  pushInt(vm, 2);
+  pushPair(vm);
+  pushInt(vm, 3);
+  pushInt(vm, 4);
+  pushPair(vm);
+  pushPair(vm);
+
+  gc(vm);
+  assert(vm->noOfObjects == 7, "Should have reached objects.");
+  freeVM(vm);
+}
+
+void test4() {
+  printf("Test 4: Handle Cycles.\n");
+  VM *vm = newVM();
+  pushInt(vm, 1);
+  pushInt(vm, 2);
+  Object *a = pushPair(vm);
+  pushInt(vm, 3);
+  pushInt(vm, 4);
+  Object *b = pushPair(vm);
+  a->tail = b;
+  b->tail = a;
+  gc(vm);
+  assert(vm->noOfObjects == 4, "Should have collected objects.\n");
+  freeVM(vm);
+}
+
+void perfTest() {
+  printf("Performance Test.\n");
+  VM *vm = newVM();
+
+  for (int i = 0; i < 1000; i++) {
+    for (int j = 0; j < 20; j++) {
+      pushInt(vm, i);
+    }
+
+    for (int k = 0; k < 20; k++) {
+      pop(vm);
+    }
+  }
+  freeVM(vm);
+}
+
 int main(int argc, const char *argv[]) {
   test1();
+  test2();
+  test3();
+  test4();
+  perfTest();
   return 0;
 }
