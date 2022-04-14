@@ -1,6 +1,9 @@
 #include <stdio.h>
+#include <stdlib.h>
+
 #define STACK_MAX 120
 #define INITIAL_GC_THRESHOLD 4
+
 typedef enum { OBJ_INT, OBJ_PAIR } ObjectType;
 
 typedef struct sObject {
@@ -18,12 +21,23 @@ typedef struct sObject {
 
 typedef struct {
   Object *stack[STACK_MAX];
-  Object *firstObject;
   int stacksize;
+
+  Object *firstObject;
 
   int noOfObjects;
   int maxNoOfObjects;
 } VM;
+
+void gc(VM *vm);
+void mark(Object *object);
+
+void assert(int condition, const char *message) {
+  if (!condition) {
+    printf("%s\n", message);
+    exit(1);
+  }
+}
 
 VM *newVM() {
   VM *vm = malloc(sizeof(VM));
@@ -36,12 +50,12 @@ VM *newVM() {
 
 void push(VM *vm, Object *obj) {
   assert(vm->stacksize < STACK_MAX, "Stack Oveflow");
-  vm->stack[++vm->stacksize] = obj;
+  vm->stack[vm->stacksize++] = obj;
 }
 
 Object *pop(VM *vm) {
-  asssert(vm->stacksize > 0, "Stack Underflow");
-  return vm->stack[vm->stacksize--];
+  assert(vm->stacksize > 0, "Stack Underflow");
+  return vm->stack[--vm->stacksize];
 }
 
 Object *newObj(VM *vm, ObjectType type) {
@@ -115,13 +129,9 @@ void gc(VM *vm) {
   sweep(vm);
   vm->maxNoOfObjects =
       vm->noOfObjects == 0 ? INITIAL_GC_THRESHOLD : vm->maxNoOfObjects * 2;
-}
 
-void assert(int condition, const char *message) {
-  if (!condition) {
-    printf("%s", message);
-    exit(1);
-  }
+  printf("Collected %d ojbects, %d remaining.\n",
+         numOfObjects - vm->noOfObjects, vm->noOfObjects);
 }
 
 void objectPrint(Object *obj) {
@@ -137,4 +147,25 @@ void objectPrint(Object *obj) {
       printf(")");
       break;
   }
+}
+
+void freeVM(VM *vm) {
+  vm->stacksize = 0;
+  gc(vm);
+  free(vm);
+}
+
+void test1() {
+  printf("Test 1: Objects on stack are preserved. \n");
+  VM *vm = newVM();
+  pushInt(vm, 1);
+  pushInt(vm, 2);
+  gc(vm);
+  assert(vm->noOfObjects == 2, "Should have preserved ojbects.");
+  freeVM(vm);
+}
+
+int main(int argc, const char *argv[]) {
+  test1();
+  return 0;
 }
