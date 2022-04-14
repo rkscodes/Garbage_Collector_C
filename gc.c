@@ -1,6 +1,6 @@
 #include <stdio.h>
 #define STACK_MAX 120
-#define INITIAL_GC_THRESHOLD 4;
+#define INITIAL_GC_THRESHOLD 4
 typedef enum { OBJ_INT, OBJ_PAIR } ObjectType;
 
 typedef struct sObject {
@@ -110,6 +110,31 @@ void sweep(VM *vm) {
 // let's wrap the whole process above in single part
 
 void gc(VM *vm) {
+  int numOfObjects = vm->noOfObjects;
   markAll(vm);
   sweep(vm);
+  vm->maxNoOfObjects =
+      vm->noOfObjects == 0 ? INITIAL_GC_THRESHOLD : vm->maxNoOfObjects * 2;
+}
+
+void assert(int condition, const char *message) {
+  if (!condition) {
+    printf("%s", message);
+    exit(1);
+  }
+}
+
+void objectPrint(Object *obj) {
+  switch (obj->type) {
+    case OBJ_INT:
+      printf("%d", obj->value);
+      break;
+    case OBJ_PAIR:
+      printf("(");
+      objectPrint(obj->head);
+      printf(", ");
+      objectPrint(obj->tail);
+      printf(")");
+      break;
+  }
 }
